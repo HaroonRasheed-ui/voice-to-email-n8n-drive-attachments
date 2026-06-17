@@ -1,0 +1,647 @@
+{
+  "name": "Email voice workflow + Drive Attachments",
+  "nodes": [
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "=data"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        512,
+        880
+      ],
+      "id": "3e699f7c-146c-4831-8d27-38f61f6ecffe",
+      "name": "Send a message",
+      "webhookId": "dffc8d37-d105-4d13-9c30-b0b73e6a2f36",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zgDd4z9vGYJkpg3z",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let email = \"\";\nlet subject = \"\";\nlet body = \"\";\n\n// Loop through all items\nfor (const item of items) {\n  // Get email & subject if present\n  if (item.json.email) email = item.json.email;\n  if (item.json.subject) subject = item.json.subject;\n\n  // Get body from Gemini output\n  if (item.json.output) {\n    body = item.json.output\n      .replace(/```html\\s*|```/g, \"\")  // remove code block markers\n      .trim();\n  }\n}\n\n// Return single item for Gmail\nreturn [\n  {\n    json: {\n      email,\n      subject,\n      body\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        240
+      ],
+      "id": "4ad64311-a65d-4744-aede-2cbe5569c6a1",
+      "name": "Code6"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        288,
+        240
+      ],
+      "id": "90d77df3-d78c-4f20-933a-aa27972158b7",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a744bd59-8b14-4ae1-94e5-c5da288ba6b5",
+              "name": "email",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "a02059e8-c893-4dbb-b8cb-576ca166c4a3",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f06d9bac-f541-4741-840a-0ebc916142ff",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        320
+      ],
+      "id": "dda7882d-88f3-4d38-ab8a-b77693bbbacc",
+      "name": "Google Gemini Chat Model2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Y6b1LGalv1H0QOQh",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -320,
+        96
+      ],
+      "id": "a879b69f-6fed-411e-b018-4cff39dd9cf6",
+      "name": "AI Agent2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $json.email || \"\";\nconst subject = $json.subject || \"\";\nconst bodyHtml = $json.body || \"\";\n\n// Build a prompt for the AI agent\nconst prompt = `\nYou are a helpful assistant. You need to take the following HTML email body and reformat it professionally for Gmail. \n\nRequirements:\n1. Preserve all the text content.\n2. Apply a clean, professional font (e.g., Arial, sans-serif) and proper line spacing.\n3. Bold important phrases and headings naturally where appropriate.\n4. Remove unnecessary things like empty spaces or irrelevant tags.\n5. Keep it fully HTML so it can be used directly in an n8n Gmail node.\n6. Do not add or change the email recipient or subject, just format the body content.\n\nOriginal HTML Body:\n${bodyHtml}\n\nReturn only the **formatted HTML** in your output.\n`.trim();\n\nreturn [\n  {\n    json: {\n      email,\n      subject,\n      prompt\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        16
+      ],
+      "id": "945690b9-80de-45e8-9104-2ff8e29f3b56",
+      "name": "Code5"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2528,
+        160
+      ],
+      "id": "a7ee75c2-fcb8-4182-b1d7-5b564ce4280a",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -2768,
+        624
+      ],
+      "id": "5936d8eb-ccd5-4847-af21-fc1ef575efa5",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Y6b1LGalv1H0QOQh",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input text from transcription\nconst text = $json.content?.parts?.[0]?.text || \"\";\n\n// Generic prompt to extract recipient, file name, and document name\nconst prompt = `\nYou are an assistant that extracts structured data.\n\nFrom the given text, do the following:\n1. Extract the email address (normalize and validate if present).\n2. Detect if the user mentioned sending or attaching any file/document.\n3. Extract the file name exactly as mentioned (if any, e.g., \"report.pdf\", \"cv.docx\", \"sales_data\").\n4. Extract the document name as a clean, human-readable title (remove extensions, underscores, etc.; e.g., \"Report\", \"CV\", \"Sales Data\").\n\nReturn ONLY valid JSON:\n{\n  \"recipient\": \"<email or null>\",\n  \"fileName\": \"<file name or null>\",\n  \"documentName\": \"<document name or null>\"\n}\n\nText: \"\"\"${text}\"\"\"\n`;\n\nreturn [{ json: { prompt } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2864,
+        320
+      ],
+      "id": "1886d87a-c6a5-4767-9003-1b09046db7f7",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -2496,
+        400
+      ],
+      "id": "51c575ba-9298-4577-82e7-03dd6691ac81",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $json.output || \"\";\n\n// Default subject\nlet subject = \"Message for You\";\n\n// Step 1: Keyword-based detection\nif (/cover letter/i.test(message)) {\n  subject = \"Cover Letter\";\n} else if (/weather/i.test(message)) {\n  subject = \"Weather Update\";\n} else if (/reminder/i.test(message)) {\n  subject = \"Reminder\";\n} else if (/report/i.test(message)) {\n  subject = \"Report\";\n} else if (/update/i.test(message)) {\n  subject = \"Update\";\n} else if (/hello|hi|greeting|good morning|good evening/i.test(message)) {\n  subject = \"Greeting\";\n} else if (/thank/i.test(message)) {\n  subject = \"Thank You Note\";\n} else {\n  // Step 2: Fallback → extract key words\n  const words = message\n    .replace(/[^\\w\\s]/g, \"\") // remove punctuation\n    .split(/\\s+/)\n    .filter(w => w.length > 3); // ignore very short words\n\n  // Take 3 words from start and 3 from end\n  const start = words.slice(0, 3).join(\" \");\n  const end = words.slice(-3).join(\" \");\n\n  subject = `${start} ... ${end}`;\n}\n\n// Step 3: Extract email from the message (if any)\nlet email = null;\nconst emailMatch = message.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-z]{2,}/);\nif (emailMatch) {\n  email = emailMatch[0];\n}\n\n// Return subject + original message + extracted email\nreturn [\n  {\n    json: {\n      subject,\n      message,\n      email\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -944,
+        80
+      ],
+      "id": "a2c9fdd0-766d-4d51-9e66-1bc87f6ed388",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $json.email || \"\";\nconst subject = $json.subject || \"Message for You\";\nconst message = $json.message || \"\";\nconst recipient = $json.recipient || \"Friend\"; // fallback if not provided\n\n// Professional HTML body without placeholder name\nconst formattedBody = `\n<html>\n  <body style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333;\">\n    <p>Dear ${recipient},</p>\n    <p>${message}</p>\n    <p style=\"margin-top: 20px;\">Best regards,</p>\n  </body>\n</html>\n`.trim();\n\nreturn [\n  {\n    json: {\n      email,\n      subject,\n      body: formattedBody\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        16
+      ],
+      "id": "fb509af0-e049-41e7-ad23-32267e81d83e",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        288
+      ],
+      "id": "e6e8afe5-70a7-4e22-94d8-bb5bf897ba9a",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Y6b1LGalv1H0QOQh",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -1344,
+        80
+      ],
+      "id": "8b429e8a-eb4b-4251-98f3-210725e17dda",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.text || \"\";\nconst email = $json.email || \"\";\n\n// Build a generic prompt for Gemini\nconst prompt = `\nYou are a helpful assistant.\n\nUser said: \"${text}\"\nRecipient email (must be used exactly as given, no changes allowed): \"${email}\"\n\nYour job:\n1. Understand what the user is asking.\n2. If it's a generic request like \"send a message\", create a short, natural, friendly greeting message.\n3. If it's a specific request (e.g., weather report, cover letter, reminder, update), generate a clear and human-like message body that matches exactly what was asked.\n4. Do not include the recipient name in the message body.\n5. Return ONLY valid JSON in the following format (email must be exactly the same as provided, without edits):\n\n{\n  \"email\": \"${email}\",\n  \"message\": \"<generated message text>\"\n}\n`.trim();\n\nreturn [\n  {\n    json: {\n      email,\n      prompt\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        80
+      ],
+      "id": "563fecda-6208-43d4-b364-5ce1cb609ca8",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "jsCode": "let recipient = null;\nlet transcription = null;\nlet fileName = null;\n\n// Step 1: Get recipient (email) and fileName from Gemini/AI output\nfor (const item of items) {\n  if (item.json.output && typeof item.json.output === \"string\") {\n    try {\n      const parsed = JSON.parse(item.json.output.replace(/```json|```/g, \"\").trim());\n      if (parsed.recipient) {\n        recipient = parsed.recipient.trim();\n      }\n      if (parsed.fileName) {\n        fileName = parsed.fileName.trim();\n      }\n    } catch (e) {\n      // ignore parsing errors\n    }\n  }\n}\n\n// Step 2: Get transcription text\nfor (const item of items) {\n  if (item.json.content && item.json.content.parts) {\n    transcription = item.json.content.parts[0].text.trim();\n  }\n}\n\n// Step 3: Directly use recipient as email\nlet email = recipient || null;\n\n// Step 4: Return combined output\nreturn [\n  {\n    json: {\n      email,\n      fileName,\n      text: transcription\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1952,
+        112
+      ],
+      "id": "2020b4f8-c614-44bc-a62f-3a37919235bb",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.0-flash"
+        },
+        "inputType": "binary",
+        "binaryPropertyName": "audio",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -3424,
+        144
+      ],
+      "id": "f638f7bf-1b6d-4ca7-9ba0-177d6fd9e068",
+      "name": "Transcribe a recording",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Y6b1LGalv1H0QOQh",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f2265fc3-ebf0-4d02-810a-baf84ee96af4",
+        "options": {
+          "binaryPropertyName": "audio"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -3696,
+        144
+      ],
+      "id": "65c6724d-5ddb-42f0-bbae-7b2a92fe150a",
+      "name": "Webhook",
+      "webhookId": "f2265fc3-ebf0-4d02-810a-baf84ee96af4"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "=name contains '{{$json[\"fileName\"]}}' and (mimeType = 'application/pdf' or mimeType contains 'image/')\n",
+        "returnAll": true,
+        "filter": {},
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -944,
+        928
+      ],
+      "id": "5ebcdba0-b64a-409f-abfb-7e1e906fdc0e",
+      "name": "Search files and folders"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {
+          "fileName": "={{ $json.name }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -592,
+        928
+      ],
+      "id": "9491fab5-140a-40ad-8656-29664fa62646",
+      "name": "Download file"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -288,
+        912
+      ],
+      "id": "a11caec3-9fad-4c7e-ba2c-098584e9fbf2",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code6": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code5": {
+      "main": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search files and folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Transcribe a recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "f11864ec-bddd-4280-a779-3ac18b5eab45",
+  "meta": {
+    "instanceId": "94334e2d77c2e31e77797d8979cf8371d331b9c03663f35ade81039ef25a7154"
+  },
+  "id": "ik7FCEy7LoxQLoZh",
+  "tags": []
+}

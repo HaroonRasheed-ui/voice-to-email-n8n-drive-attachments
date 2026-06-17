@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Mic Recorder → n8n Webhook</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { display:flex; min-height:100dvh; align-items:center; justify-content:center; margin:0; background:#0f172a; color:#e5e7eb; }
+    .card { width:min(720px, 92vw); background:#111827; border:1px solid #1f2937; border-radius:18px; padding:22px; box-shadow:0 10px 30px rgba(0,0,0,.35);}
+    h1 { margin:0 0 8px; font-size:1.35rem; color:#f9fafb;}
+    p.sub { margin:0 0 16px; color:#9ca3af; font-size:.95rem;}
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0; }
+    button {
+      appearance:none; border:1px solid #374151; background:#1f2937; color:#e5e7eb;
+      padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600;
+      transition:.2s transform, .2s background, .2s border;
+    }
+    button:hover { transform:translateY(-1px); background:#232d3e; }
+    button:disabled { opacity:.55; cursor:not-allowed; transform:none; }
+    .danger { background:#7f1d1d; border-color:#9f1239; }
+    .accent { background:#065f46; border-color:#047857; }
+    .meter { height:10px; background:#111827; border:1px solid #374151; border-radius:999px; overflow:hidden; }
+    .bar { height:100%; width:0%; background:#60a5fa; transition:width .08s linear; }
+    .tags { display:flex; gap:8px; flex-wrap:wrap; }
+    .tag { font-size:.8rem; padding:6px 10px; background:#0b1220; border:1px dashed #374151; border-radius:999px; color:#cbd5e1; }
+    .log { white-space:pre-wrap; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; background:#0b1120; border:1px solid #1f2937; border-radius:12px; padding:12px; color:#cbd5e1; max-height:220px; overflow:auto; }
+    audio { width:100%; margin-top:10px; }
+    .dim { color:#9ca3af; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Record Audio &rarr; n8n Webhook</h1>
+    <p class="sub">Click <b>Record</b>, then <b>Pause</b>/<b>Resume</b>, <b>Stop</b> to finalize, and <b>Send</b> to upload the binary to your webhook.</p>
+
+    <div class="row">
+      <button id="btnRecord">● Record</button>
+      <button id="btnPause" disabled>Ⅱ Pause</button>
+      <button id="btnStop" class="danger" disabled>■ Stop</button>
+      <button id="btnSend" class="accent" disabled>⬆ Send</button>
+      <span id="timer" class="tag">00:00</span>
+      <span id="mime" class="tag dim">MIME: —</span>
+      <span id="size" class="tag dim">Size: —</span>
+    </div>
+
+    <div class="meter"><div id="bar" class="bar"></div></div>
+
+    <audio id="player" controls></audio>
+
+    <div class="row">
+      <label class="dim">Webhook URL</label>
+      <input id="webhook" type="text" style="flex:1; padding:10px; border-radius:10px; border:1px solid #374151; background:#0b1120; color:#e5e7eb;"
+             value="http://localhost:5678/webhook-test/f2265fc3-ebf0-4d02-810a-baf84ee96af4" />
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <p class="sub dim">Tip: Some browsers record as <code>audio/webm</code> or <code>audio/ogg</code>. n8n will store the raw binary. If you need a field named <code>audio</code>, use the multipart example in the code (commented).</p>
+  </main>
+
+  <script>
+    // ======== Config ========
+    const WEBHOOK_INPUT = document.getElementById('webhook'); // editable
+    // ========================
+
+    const btnRecord = document.getElementById('btnRecord');
+    const btnPause  = document.getElementById('btnPause');
+    const btnStop   = document.getElementById('btnStop');
+    const btnSend   = document.getElementById('btnSend');
+    const timer     = document.getElementById('timer');
+    const mimeTag   = document.getElementById('mime');
+    const sizeTag   = document.getElementById('size');
+    const logEl     = document.getElementById('log');
+    const player    = document.getElementById('player');
+    const bar       = document.getElementById('bar');
+
+    let mediaRecorder;
+    let audioChunks = [];
+    let startTime = 0;
+    let tickHandle;
+    let analyser, source, audioCtx;
+    let lastBlob = null;
+
+    function log(msg) { logEl.textContent = (msg + "\n" + logEl.textContent).slice(0, 10000); }
+
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+    }
+
+    function pickMimeType() {
+      const candidates = [
+        'audio/webm;codecs=opus',
+        'audio/ogg;codecs=opus',
+        'audio/webm',
+        'audio/ogg'
+        // Note: MediaRecorder typically doesn't produce WAV
+      ];
+      for (const m of candidates) {
+        if (MediaRecorder.isTypeSupported(m)) return m;
+      }
+      return ''; // let browser choose
+    }
+
+    async function setupAnalyser(stream) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      function draw() {
+        analyser.getByteTimeDomainData(dataArray);
+        // simple peak amplitude meter
+        let peak = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const v = Math.abs(dataArray[i] - 128);
+          if (v > peak) peak = v;
+        }
+        const pct = Math.min(100, Math.round((peak / 128) * 100));
+        bar.style.width = pct + '%';
+        requestAnimationFrame(draw);
+      }
+      draw();
+    }
+
+    btnRecord.addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        await setupAnalyser(stream);
+
+        const mimeType = pickMimeType();
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        audioChunks = [];
+        lastBlob = null;
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstart = () => {
+          startTime = Date.now();
+          tickHandle = setInterval(() => {
+            timer.textContent = formatTime(Date.now() - startTime);
+          }, 200);
+          btnRecord.disabled = true;
+          btnPause.disabled = false;
+          btnStop.disabled = false;
+          btnSend.disabled = true;
+          mimeTag.textContent = `MIME: ${mediaRecorder.mimeType || 'auto'}`;
+          sizeTag.textContent = 'Size: —';
+          log('Recording started');
+        };
+
+        mediaRecorder.onpause = () => log('Paused');
+        mediaRecorder.onresume = () => log('Resumed');
+
+        mediaRecorder.onstop = () => {
+          clearInterval(tickHandle);
+          const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+          lastBlob = blob;
+          sizeTag.textContent = `Size: ${(blob.size / 1024).toFixed(1)} KB`;
+          player.src = URL.createObjectURL(blob);
+          btnRecord.disabled = false;
+          btnPause.disabled = true;
+          btnStop.disabled = true;
+          btnSend.disabled = false;
+          stream.getTracks().forEach(t => t.stop());
+          if (audioCtx) audioCtx.close().catch(()=>{});
+          log('Stopped. Ready to send.');
+        };
+
+        mediaRecorder.start(250); // timeslice collects chunks periodically
+      } catch (err) {
+        log('Error: ' + (err?.message || err));
+        alert('Microphone permission is required.');
+      }
+    });
+
+    btnPause.addEventListener('click', () => {
+      if (!mediaRecorder) return;
+      if (mediaRecorder.state === 'recording') {
+        mediaRecorder.pause();
+        btnPause.textContent = '▶ Resume';
+      } else if (mediaRecorder.state === 'paused') {
+        mediaRecorder.resume();
+        btnPause.textContent = 'Ⅱ Pause';
+      }
+    });
+
+    btnStop.addEventListener('click', () => {
+      if (mediaRecorder && (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused')) {
+        mediaRecorder.stop();
+      }
+    });
+
+    btnSend.addEventListener('click', async () => {
+      if (!lastBlob) {
+        alert('There is no recording to send. Record and stop first.');
+        return;
+      }
+      const url = WEBHOOK_INPUT.value.trim();
+      if (!url) { alert('Please enter your webhook URL.'); return; }
+
+      btnSend.disabled = true;
+      log('Sending to webhook…');
+
+      try {
+        // ---- RAW BINARY (recommended for n8n webhook binary) ----
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            // Send as the blob's MIME type; n8n will store raw body as binary
+            'Content-Type': lastBlob.type || 'application/octet-stream'
+          },
+          body: lastBlob
+        });
+
+        // ---- ALTERNATIVE: multipart/form-data with field name 'audio' ----
+        // const fd = new FormData();
+        // fd.append('audio', lastBlob, `recording.${(lastBlob.type.includes('ogg')?'ogg':'webm')}`);
+        // const res = await fetch(url, { method: 'POST', body: fd });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        log('✅ Upload complete.');
+        alert('Upload complete!');
+      } catch (e) {
+        log('❌ Upload failed: ' + (e?.message || e));
+        alert('Upload failed. Check console/log.');
+      } finally {
+        btnSend.disabled = false;
+      }
+    });
+
+    // UX: Warn about insecure context
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      log('Warning: Microphone access usually requires HTTPS.');
+    }
+  </script>
+</body>
+</html>
